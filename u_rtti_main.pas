@@ -204,9 +204,6 @@ begin
       Scanner.SetCompilerMode('OBJFPC');
       Scanner.SetCompilerMode('DELPHI');
 
-      // InputFilename:= 'I:\AppBuilder\Delfi\Top Down City\CODE\game_Cars.pas';
-      // InputFilename:= 'I:\AppBuilder\Delfi\Top Down City\CODE\game_Actors.pas';
-
       if InputFilename = '' then
         raise Exception.Create(SErrNoSourceGiven);
 
