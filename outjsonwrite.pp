@@ -951,7 +951,7 @@ var
 	Member: TPasElement;
 
 Var
-i, j : integer;
+i, k: integer;
 class_method_list, class_property_list, class_variable_list, where_put_member: TJSONObject;
 currentmethod: TJSONObject;
 methodtypes, varprop: TJSONObject;
@@ -959,6 +959,213 @@ methodvisLabel: String;
 currmethodlist: TJSONArray;
 newmethodlist, paramarray: Tjsonarray;
 IsImpl: TPasElement;
+
+procedure WriteSeparateMemberProp(var currmethodlist: TJSONArray; const Member: TPasElement);
+var
+	j: integer;
+begin
+
+	if Member is TPasProcedure then
+		where_put_member:= class_method_list
+	else if Member is TPasFunction then
+		where_put_member:= class_method_list
+	else if member is TPasProperty then
+		where_put_member:= class_property_list
+	else if Member is TPasVariable then
+		where_put_member:= class_variable_list;
+
+    methodvisLabel:= getvistestrepr( Member.Visibility );
+
+    currmethodlist:= nil;
+
+    where_put_member.find(methodvisLabel, currmethodlist);
+
+  if (not assigned(currmethodlist)) then begin
+
+    currmethodlist:= TJSONArray.Create();
+
+  	where_put_member.Add(methodvisLabel, currmethodlist);
+
+  end;
+
+
+    currentmethod:= TJSONObject.Create();
+
+    currentmethod.Add('name', Member.SafeName);
+
+    // todo: static variables.
+
+    currentmethod.Add('Member.ClassName', Member.ClassName);
+
+    // currentmethod.Add('test_decl', Member.GetDeclaration(true));
+
+
+    // if (TPasProcedureImpl(aMembers[i]).IsClassMethod) then currentmethod.Add('IsClass', true);
+    // if (TPasProperty(member).IsClass) then currentmethod.Add('IsClass', true);
+
+    // vmClass in VarModifiers
+
+
+    // currentmethod.add('Debug member class', Member.ClassName);
+
+
+    		try
+            if Member is TPasFunction then begin
+
+            		//currentmethod.add('method_type', 'function');
+
+            		currentmethod.add('method_type', TPasProcedure(member).TypeName);
+
+                  if TPasFunction(member).IsVirtual       then currentmethod.add('Virtual', true);
+                  if TPasFunction(member).IsDynamic       then currentmethod.add('Dynamic', true);
+                  if TPasFunction(member).IsAbstract      then currentmethod.add('Abstract', true);
+                  if TPasFunction(member).IsOverride      then currentmethod.add('Override', true);
+                  if TPasFunction(member).IsExported      then currentmethod.add('Exported', true);
+                  if TPasFunction(member).IsExternal      then currentmethod.add('External', true);
+                  if TPasFunction(member).IsOverload      then currentmethod.add('Overload', true);
+                  if TPasFunction(member).IsMessage       then currentmethod.add('Message', true);
+                  if TPasFunction(member).IsReintroduced  then currentmethod.add('Reintroduced', true);
+                  if TPasFunction(member).IsStatic        then currentmethod.add('Static', true);
+                  if TPasFunction(member).IsForward       then currentmethod.add('Forward', true);
+                  if TPasFunction(member).IsAssembler     then currentmethod.add('Assembler', true);
+                  if TPasFunction(member).IsAsync         then currentmethod.add('Async', true);
+
+  		  end
+  		  else if Member is TPasProcedure then begin
+
+            		currentmethod.add('method_type', TPasProcedure(member).TypeName);
+
+                  if TPasProcedure(member).IsVirtual       then currentmethod.add('Virtual', true);
+                  if TPasProcedure(member).IsDynamic       then currentmethod.add('Dynamic', true);
+                  if TPasProcedure(member).IsAbstract      then currentmethod.add('Abstract', true);
+                  if TPasProcedure(member).IsOverride      then currentmethod.add('Override', true);
+                  if TPasProcedure(member).IsExported      then currentmethod.add('Exported', true);
+                  if TPasProcedure(member).IsExternal      then currentmethod.add('External', true);
+                  if TPasProcedure(member).IsOverload      then currentmethod.add('Overload', true);
+                  if TPasProcedure(member).IsMessage       then currentmethod.add('Message', true);
+                  if TPasProcedure(member).IsReintroduced  then currentmethod.add('Reintroduced', true);
+                  if TPasProcedure(member).IsStatic        then currentmethod.add('Static', true);
+                  if TPasProcedure(member).IsForward       then currentmethod.add('Forward', true);
+                  if TPasProcedure(member).IsAssembler     then currentmethod.add('Assembler', true);
+                  if TPasProcedure(member).IsAsync         then currentmethod.add('Async', true);
+
+  		  end;
+
+            //else if member is TPasProperty then
+            //    currentmethod.add('member type', 'property')
+            //else if Member is TPasVariable then
+  		  //    currentmethod.add('member type', 'var')
+            //else
+            //  currentmethod.add('type', 'type ' + Member.ClassName + ' not implemented')
+
+        except on e: Exception do
+
+        	currentmethod.add('type', 'exception ' + e.Message);
+
+  	  end;
+
+
+        paramarray:= Tjsonarray.Create();
+
+        if (Member is TPasProcedure) or (Member is TPasFunction) then begin
+        	  currentmethod.Add('parameters', paramarray);
+        	  WriteProcDecljson(TpasProcedure(Member), currentmethod, paramarray)
+  	  end
+  	  else if member is TPasProperty then begin
+
+        	with TPasProperty(member) do begin
+
+  	      	currentmethod.Add('safename', SafeName);
+
+              if (IsClass) then currentmethod.Add('IsClass', true);
+
+              if IndexValue <> '' then
+                currentmethod.Add('Index', IndexValue);
+              if ReadAccessorName <> '' then
+              	currentmethod.Add('read', ReadAccessorName);
+              if WriteAccessorName <> '' then
+              	currentmethod.Add('write', WriteAccessorName);
+              if StoredAccessorName <> '' then
+              	currentmethod.Add('stored', StoredAccessorName);
+              if DefaultValue <> '' then
+              	currentmethod.Add('default', DefaultValue);
+              if IsNodefault then
+              	currentmethod.Add('nodefault', true);
+              if IsDefault then
+              	currentmethod.Add('default', true);
+
+  	        if Assigned(VarType) then
+  	        	currentmethod.Add('proptype', VarType.SafeName);
+
+              if Args.Count > 0 then
+              begin
+
+              	currentmethod.Add('TODO: Args.Count is needed for properties.', true);
+
+                for j := 0 to Args.Count - 1 do
+                  begin
+
+                  	// TpasArgument(Args[j]).SafeName;
+
+                  end;
+
+              end;
+
+  		end;
+
+
+
+
+          // TPasProperty(member).SafeName
+
+  	  end
+  	  else if Member is TPasVariable then begin
+
+          WriteVariablejsonparameter(TpasVariable(Member), nil, currentmethod);
+
+
+  	  end else
+        	raise EPasWriter.CreateFmt('Writing not implemented for %s ( %s ) nodes',[Member.ElementTypeName, member.ClassName]);
+
+
+{
+    if Member.InheritsFrom(TpasVariable) then
+
+    else if Member.InheritsFrom(TPasModule) then
+      WriteModule(TPasModule(Member) )
+    else if Member.InheritsFrom(TPasSection) then
+      WriteSection(TPasSection(Member))
+    else if Member.ClassType.InheritsFrom(TPasProperty) then
+      WriteProperty(TPasProperty(Member))
+    else if Member.InheritsFrom(TpasConst) then
+      WriteConst(TpasConst(Member)) // Must be before variable
+    else if Member.InheritsFrom(TpasArgument) then
+      WriteArgument(TpasArgument(Member))
+    else if Member.InheritsFrom(TPasType) then
+      WriteType(TPasType(Member))
+    else if Member.InheritsFrom(TpasOverloadedProc) then
+      WriteOverloadedProc(TpasOverloadedProc(Member))
+    else if Member.InheritsFrom(TpasProcedureImpl) then // This one must come before TProcedureBody/TpasProcedure
+      WriteProcImpl(TpasProcedureImpl(Member))
+    else if Member.InheritsFrom(TpasProcedure) then
+      WriteProcDecljson(TpasProcedure(Member), currentmethod, paramarray)
+    else if Member.InheritsFrom(TProcedureBody) then
+      WriteProcImpl(TProcedureBody(Member))
+    else if Member.InheritsFrom(TpasImplCommand) or Member.InheritsFrom(TpasImplCommands) then
+      WriteImplElement(TpasImplElement(Member),false)
+    else if Member.InheritsFrom(TPasResString) then
+      WriteResourceString(TPasResString(Member))
+   else
+      raise EPasWriter.CreateFmt('Writing not implemented for %s nodes',[Member.ElementTypeName]);
+     }
+
+
+
+
+
+    currmethodlist.Add(currentmethod);
+
+end;
 
 begin
 
@@ -991,205 +1198,29 @@ begin
 
     	Member := TPasElement(aMembers[i]);
 
-		if Member is TPasProcedure then
-			where_put_member:= class_method_list
-		else if Member is TPasFunction then
-			where_put_member:= class_method_list
-		else if member is TPasProperty then
-			where_put_member:= class_property_list
-		else if Member is TPasVariable then
-			where_put_member:= class_variable_list;
+        if Member.InheritsFrom(TpasOverloadedProc) then begin // from TPasProcedureBase
 
-	    methodvisLabel:= getvistestrepr( Member.Visibility );
+			// inherited functions have multiple functions in overloads prop
 
-        currmethodlist:= nil;
+        	with TpasOverloadedProc(Member) do begin
 
-        where_put_member.find(methodvisLabel, currmethodlist);
+	        	for k:= 0 to Overloads.Count - 1 do begin
 
-      if (not assigned(currmethodlist)) then begin
+                    WriteSeparateMemberProp(currmethodlist, TPasElement(Overloads[k]) );
 
-        currmethodlist:= TJSONArray.Create();
-
-      	where_put_member.Add(methodvisLabel, currmethodlist);
-
-	  end;
-
-      currentmethod:= TJSONObject.Create();
-
-      currentmethod.Add('name', Member.SafeName);
-
-      // todo: static variables.
-
-      //currentmethod.Add('Member.ClassName', Member.ClassName);
-
-      // currentmethod.Add('SHIT', Member.GetDeclaration(true));
-
-
-      // if (TPasProcedureImpl(aMembers[i]).IsClassMethod) then currentmethod.Add('IsClass', true);
-      // if (TPasProperty(member).IsClass) then currentmethod.Add('IsClass', true);
-
-      // vmClass in VarModifiers
-
-
-      // currentmethod.add('Debug member class', Member.ClassName);
-
-      // todo: properties.. ActorStateDirExiting
-
-  		try
-          if Member is TPasFunction then begin
-
-          		//currentmethod.add('method_type', 'function');
-
-          		currentmethod.add('method_type', TPasProcedure(member).TypeName);
-
-                if TPasFunction(member).IsVirtual       then currentmethod.add('Virtual', true);
-                if TPasFunction(member).IsDynamic       then currentmethod.add('Dynamic', true);
-                if TPasFunction(member).IsAbstract      then currentmethod.add('Abstract', true);
-                if TPasFunction(member).IsOverride      then currentmethod.add('Override', true);
-                if TPasFunction(member).IsExported      then currentmethod.add('Exported', true);
-                if TPasFunction(member).IsExternal      then currentmethod.add('External', true);
-                if TPasFunction(member).IsOverload      then currentmethod.add('Overload', true);
-                if TPasFunction(member).IsMessage       then currentmethod.add('Message', true);
-                if TPasFunction(member).IsReintroduced  then currentmethod.add('Reintroduced', true);
-                if TPasFunction(member).IsStatic        then currentmethod.add('Static', true);
-                if TPasFunction(member).IsForward       then currentmethod.add('Forward', true);
-                if TPasFunction(member).IsAssembler     then currentmethod.add('Assembler', true);
-                if TPasFunction(member).IsAsync         then currentmethod.add('Async', true);
-
-		  end
-		  else if Member is TPasProcedure then begin
-
-          		currentmethod.add('method_type', TPasProcedure(member).TypeName);
-
-                if TPasProcedure(member).IsVirtual       then currentmethod.add('Virtual', true);
-                if TPasProcedure(member).IsDynamic       then currentmethod.add('Dynamic', true);
-                if TPasProcedure(member).IsAbstract      then currentmethod.add('Abstract', true);
-                if TPasProcedure(member).IsOverride      then currentmethod.add('Override', true);
-                if TPasProcedure(member).IsExported      then currentmethod.add('Exported', true);
-                if TPasProcedure(member).IsExternal      then currentmethod.add('External', true);
-                if TPasProcedure(member).IsOverload      then currentmethod.add('Overload', true);
-                if TPasProcedure(member).IsMessage       then currentmethod.add('Message', true);
-                if TPasProcedure(member).IsReintroduced  then currentmethod.add('Reintroduced', true);
-                if TPasProcedure(member).IsStatic        then currentmethod.add('Static', true);
-                if TPasProcedure(member).IsForward       then currentmethod.add('Forward', true);
-                if TPasProcedure(member).IsAssembler     then currentmethod.add('Assembler', true);
-                if TPasProcedure(member).IsAsync         then currentmethod.add('Async', true);
-
-		  end;
-
-          //else if member is TPasProperty then
-          //    currentmethod.add('member type', 'property')
-          //else if Member is TPasVariable then
-		  //    currentmethod.add('member type', 'var')
-          //else
-          //  currentmethod.add('type', 'type ' + Member.ClassName + ' not implemented')
-
-      except on e: Exception do
-
-      	currentmethod.add('type', 'exception ' + e.Message);
-
-	  end;
-
-      paramarray:= Tjsonarray.Create();
-
-      if (Member is TPasProcedure) or (Member is TPasFunction) then begin
-      	  currentmethod.Add('parameters', paramarray);
-      	  WriteProcDecljson(TpasProcedure(Member), currentmethod, paramarray)
-	  end
-	  else if member is TPasProperty then begin
-
-      	with TPasProperty(member) do begin
-
-	      	currentmethod.Add('safename', SafeName);
-
-            if (IsClass) then currentmethod.Add('IsClass', true);
-
-            if IndexValue <> '' then
-              currentmethod.Add('Index', IndexValue);
-            if ReadAccessorName <> '' then
-            	currentmethod.Add('read', ReadAccessorName);
-            if WriteAccessorName <> '' then
-            	currentmethod.Add('write', WriteAccessorName);
-            if StoredAccessorName <> '' then
-            	currentmethod.Add('stored', StoredAccessorName);
-            if DefaultValue <> '' then
-            	currentmethod.Add('default', DefaultValue);
-            if IsNodefault then
-            	currentmethod.Add('nodefault', true);
-            if IsDefault then
-            	currentmethod.Add('default', true);
-
-	        if Assigned(VarType) then
-	        	currentmethod.Add('proptype', VarType.SafeName);
-
-            if Args.Count > 0 then
-            begin
-
-            	currentmethod.Add('TODO: Args.Count is needed for properties.', true);
-
-              for j := 0 to Args.Count - 1 do
-                begin
-
-                	// TpasArgument(Args[j]).SafeName;
-
-                end;
+				end;
 
             end;
 
+			// WriteOverloadedProc(TpasOverloadedProc(Member))
+
+		end else begin
+
+            WriteSeparateMemberProp(currmethodlist, Member);
+
 		end;
 
-
-
-
-        // TPasProperty(member).SafeName
-
-	  end
-	  else if Member is TPasVariable then begin
-
-        WriteVariablejsonparameter(TpasVariable(Member), nil, currentmethod);
-
-
-	  end else
-      raise EPasWriter.CreateFmt('Writing not implemented for %s ( %s ) nodes',[Member.ElementTypeName, member.ClassName]);
-
-
-  {
-	  if Member.InheritsFrom(TpasVariable) then
-
-	  else if Member.InheritsFrom(TPasModule) then
-	    WriteModule(TPasModule(Member) )
-	  else if Member.InheritsFrom(TPasSection) then
-	    WriteSection(TPasSection(Member))
-	  else if Member.ClassType.InheritsFrom(TPasProperty) then
-	    WriteProperty(TPasProperty(Member))
-	  else if Member.InheritsFrom(TpasConst) then
-	    WriteConst(TpasConst(Member)) // Must be before variable
-	  else if Member.InheritsFrom(TpasArgument) then
-	    WriteArgument(TpasArgument(Member))
-	  else if Member.InheritsFrom(TPasType) then
-	    WriteType(TPasType(Member))
-	  else if Member.InheritsFrom(TpasOverloadedProc) then
-	    WriteOverloadedProc(TpasOverloadedProc(Member))
-	  else if Member.InheritsFrom(TpasProcedureImpl) then // This one must come before TProcedureBody/TpasProcedure
-	    WriteProcImpl(TpasProcedureImpl(Member))
-	  else if Member.InheritsFrom(TpasProcedure) then
-	    WriteProcDecljson(TpasProcedure(Member), currentmethod, paramarray)
-	  else if Member.InheritsFrom(TProcedureBody) then
-	    WriteProcImpl(TProcedureBody(Member))
-	  else if Member.InheritsFrom(TpasImplCommand) or Member.InheritsFrom(TpasImplCommands) then
-	    WriteImplElement(TpasImplElement(Member),false)
-	  else if Member.InheritsFrom(TPasResString) then
-	    WriteResourceString(TPasResString(Member))
-	 else
-	    raise EPasWriter.CreateFmt('Writing not implemented for %s nodes',[Member.ElementTypeName]);
-       }
-
-
-
-
-
-      currmethodlist.Add(currentmethod);
-  end;
+    end; // with member
 
 end;
 
@@ -1564,7 +1595,10 @@ begin
   // if NamePrefix is not empty, we're writing a dummy for external class methods.
   // In that case, we must not write the 'overload'.
   if AProc.IsOverload and (NamePrefix='') and not IsImpl then
-    methodclass.add('overload', true);
+
+  	if (methodclass.Get('Overload') = nil) then
+	  	methodclass.add('Overload', true);
+
   if not IsImpl then
     begin
     if AProc.IsVirtual then
