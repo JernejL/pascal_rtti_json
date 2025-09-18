@@ -126,7 +126,10 @@ type
     Procedure WriteArrayType(AType : TPasArrayType; Full : Boolean = True); virtual;
     procedure WriteProcType(AProc: TPasProcedureType);  virtual;
     procedure WriteProcDecl(AProc: TpasProcedure; ForceBody: Boolean = False; NamePrefix : String = ''); virtual;
+
     procedure WriteProcDecljson(AProc: TpasProcedure; methodclass: TJSONObject; toparameterarray: TJSONArray; ForceBody: Boolean = False; NamePrefix : String = ''); virtual;
+    procedure WriteProcTypejson(Aproc: TPasProcedureType; methodclass: TJSONObject; toparameterarray: TJSONArray; ForceBody: Boolean = False; NamePrefix : String = ''); virtual;
+
     procedure WriteProcImpl(AProc: TProcedureBody; IsAsm : Boolean = false); virtual;
     procedure WriteProcImpl(AProc: TpasProcedureImpl); virtual;
     procedure WriteProperty(AProp: TPasProperty); virtual;
@@ -296,7 +299,7 @@ end;
 procedure TJsonWriter.WriteType(AType: TPasType; Full : Boolean = True);
 var
 	typearr: TJSONArray;
-    enumarr: TJSONArray;
+    enumarr, paramarray: Tjsonarray;
     typeobject, structprop: Tjsonobject;
 	i: Integer;
   //S : TStringList;
@@ -479,7 +482,12 @@ begin
 		else if AType is TPasProcedureType then with TPasProcedureType(AType) do begin
 	      // WriteProcDecl(TpasProcedure(AElement))
 
-	        typeobject.Add( 'proceduretype', 'TPasProcedureType' );
+            paramarray:= Tjsonarray.Create();
+
+	        //if (AType is TPasProcedure) or (AType is TPasFunction) then begin
+            WriteProcTypejson(TPasProcedureType(AType), typeobject, paramarray); // TPasProcedureType
+
+        	typeobject.Add('parameters', paramarray);
 
         end else if AType is TPasPointerType then with TPasPointerType(AType) do begin
 
@@ -1299,7 +1307,7 @@ begin
 
         if (Member is TPasProcedure) or (Member is TPasFunction) then begin
         	  currentmethod.Add('parameters', paramarray);
-        	  WriteProcDecljson(TpasProcedure(Member), currentmethod, paramarray)
+        	  WriteProcDecljson(TpasProcedure(Member), currentmethod, paramarray) // TpasProcedure
   	  end
   	  else if member is TPasProperty then begin
 
@@ -1868,6 +1876,87 @@ begin
     begin
       // WriteProcImpljson(AProc.Body,pmAssembler in AProc.Modifiers)
     end;
+
+  //toparameterarray.Add(tempo);
+
+end;
+
+procedure TJsonWriter.WriteProcTypejson(Aproc: TPasProcedureType;
+	methodclass: TJSONObject; toparameterarray: TJSONArray; ForceBody: Boolean;
+	NamePrefix: String);
+Var
+  AddExternal : boolean;
+  IsImpl : Boolean;
+  tempresult: TJSONObject;
+  methodreturn: TJSONArray;
+
+begin
+
+  //tempo:= TJSONObject.Create();
+
+  IsImpl:=AProc.Parent is TImplementationSection;
+
+  // if Not IsImpl then IsImpl:=FInImplementation;
+
+  // skip implementation (only definition)
+  if FInImplementation and not forcebody and HasOption(woSkipPrivateExternals)  then Exit;
+
+  // tempo.add('method type', AProc.TypeName);
+  // tempo.add('name', NamePrefix+AProc.SafeName);
+
+  if AProc is TPasFunctionType then // is a function so it has return parameter.
+  begin
+
+//  	methodclass.add('type', 'function');
+
+	tempresult:= Tjsonobject.Create();
+	tempresult.add('name', 'return');
+	tempresult.add('type', WriteTypeJson(TPasFunctionType(AProc).ResultEl.ResultType,False, tempresult) );
+    tempresult.add('access', 'return');
+
+    methodreturn:= Tjsonarray.Create();
+
+    methodreturn.ADD(tempresult);
+
+    methodclass.add('return', methodreturn);
+
+	//toparameterarray.add(tempresult);
+
+  end else begin
+
+    // if (AProc.ProcType is TPasProcedureType) then methodclass.add('type', 'procedure');
+
+  end;
+
+  if Assigned(AProc) and (AProc.Args.Count > 0) then
+    AddProcArgsjson(AProc.Args, toparameterarray); // ADD ALL INPUT PARAMETERS
+
+{
+  VarArgsType: TPasType;
+}
+
+
+    (*
+  if not IsImpl then
+    begin
+    if AProc.IsVirtual then
+      methodclass.add('virtual', true);
+    if AProc.IsDynamic then
+      methodclass.add('dynamic', true);
+    if AProc.IsAbstract then
+      methodclass.add('abstract', true);
+    if AProc.IsOverride then
+      methodclass.add('override', true);
+    if AProc.IsStatic then
+      methodclass.add('static', true);
+    end;
+   *)
+
+	// ptmOfObject,ptmIsNested,ptmStatic,ptmVarargs, ptmReferenceTo,ptmAsync,ptmFar,ptmCblock
+
+  // if (pmAssembler in AProc.Modifiers) and Not (woNoAsm in OPtions) then methodclass.add('assembler', true);
+  if AProc.CallingConvention<>ccDefault then
+    methodclass.add('convention', cCallingConventions[AProc.CallingConvention] );
 
   //toparameterarray.Add(tempo);
 
