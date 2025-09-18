@@ -8,6 +8,7 @@ unit u_rtti_main;
 // example 1: https://github.com/fpc/FPCSource/blob/fd677978e7661b22a15fb3a9bce3f5c4b2ae8134/utils/fpdoc/unitdiff.pp#L61
 // example 2: https://fossies.org/linux/misc/fpcbuild-3.2.2.tar.gz/fpcbuild-3.2.2/fpcsrc/packages/fcl-passrc/src/pasuseanalyzer.pas
 
+
 interface
 
 uses

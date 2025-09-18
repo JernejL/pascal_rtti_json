@@ -114,7 +114,7 @@ type
     procedure WriteModule(AModule: TPasModule); virtual;
     procedure WriteSection(ASection: TPasSection); virtual;
     procedure WriteUsesList(ASection: TPasSection); virtual;
-    procedure WriteClass(AClass: TPasClassType); virtual;
+    procedure WriteClass(AClass: TPasMembersType); virtual;
     procedure WriteConst(AConst: TpasConst); virtual;
     procedure WriteVariable(aVar: TpasVariable); virtual;
     procedure WriteVariablejsonparameter(aVar: TpasVariable;  toparameterarray: TJSONArray;  existingobject: TJSONObject); virtual;
@@ -174,7 +174,7 @@ type
 
 constructor TJsonWriter.Create(AStream: TStream);
 var
-	classarr: TJSONArray;
+	classarr, typearr: TJSONArray;
 begin
   FStream := AStream;
   IndentSize:=2;
@@ -184,8 +184,12 @@ begin
   FLineEnding:=sLineBreak;
 
   Fjson:= TJSONObject.create();
+
   classarr:= TJSONArray.Create();
   Fjson.Add('class', classarr);
+
+  typearr:= TJSONArray.Create();
+  Fjson.Add('simpletype', typearr);
 
 end;
 
@@ -265,7 +269,7 @@ begin
   else if AElement.InheritsFrom(TpasProcedureImpl) then // This one must come before TProcedureBody/TpasProcedure
     WriteProcImpl(TpasProcedureImpl(AElement))
   else if AElement.InheritsFrom(TpasProcedure) then
-    WriteProcDecl(TpasProcedure(AElement))
+    // WriteProcDecl(TpasProcedure(AElement))
   else if AElement.InheritsFrom(TProcedureBody) then
     WriteProcImpl(TProcedureBody(AElement))
   else if AElement.InheritsFrom(TpasImplCommand) or AElement.InheritsFrom(TpasImplCommands) then
@@ -290,8 +294,211 @@ begin
 end;
 
 procedure TJsonWriter.WriteType(AType: TPasType; Full : Boolean = True);
+var
+	typearr: TJSONArray;
+    enumarr: TJSONArray;
+    typeobject, structprop: Tjsonobject;
+	i: Integer;
+  //S : TStringList;
+
+  //T : TStringList;
+  temp : TPasTreeString;
+  J : integer;
+  E : TPasElement;
+  CV : TPasMemberVisibility ;
 
 begin
+
+  // not ok:
+  if (fjson.Find('simpletype', typearr) = false) then begin
+
+	  typearr:= TJSONArray.Create();
+	  fjson.Add('simpletype', typearr);
+
+  end;
+
+  if (AType.Parent is TPasSection) then begin
+
+  	typeobject:= Tjsonobject.Create();
+
+    if not (AType.InheritsFrom(TPasMembersType)) then begin // ignore records and classes here.
+
+	    typeobject.Add( 'Type', AType.name);
+	    typeobject.Add( 'typename', atype.ElementTypeName );
+
+        if AType is TPasSetType  then with TPasSetType(AType) do begin
+
+            // typeobject.Add( 'class', EnumType.ClassName );
+
+            // TPasUnresolvedTypeRef
+
+	        If (EnumType is TPasEnumType) and (EnumType.Name='') then with TPasEnumType(EnumType) do begin
+
+                typeobject.Add( 'set_type', 'set_of_values' );
+
+    	        enumarr:= TJSONArray.Create();
+
+              	for i:= 0 to Values.count - 1 do
+
+            		enumarr.Add(TPasEnumValue(Values[i]).Name);
+
+              	//.GetEnumNames(S);
+
+                typeobject.Add( 'set_values', enumarr );
+
+	          end
+	        else
+	          begin
+
+              	typeobject.Add( 'set_type', 'set_of_enum' );
+
+                typeobject.Add( 'enum_type', EnumType.SafeName );
+
+              end;
+
+		end else
+        if AType is TPasEnumType then with TPasEnumType(AType) do begin
+
+          enumarr:= TJSONArray.Create();
+
+	        with Values do
+	        begin
+	          for i := 0 to Count -1 do
+	            enumarr.Add(TPasEnumValue(Items[i]).Name);
+	        end;
+
+          typeobject.Add( 'enum_values', enumarr );
+
+		end else
+        if AType is TPasArrayType then with TPasArrayType(AType) do begin
+
+		  If (IndexRange<>'') then begin
+		  	typeobject.Add( 'dynamic_array', false );
+            typeobject.add('Range0', IndexRange);
+		  end
+		  else if Length(Ranges)>0 then
+		    begin
+
+                typeobject.Add( 'dynamic_array', false );
+
+		      for i:=0 to Length(Ranges)-1 do
+		        begin
+
+                  typeobject.add('Range (TODO: TEST RANGES)' + inttostr(i), Ranges[i].GetDeclaration(true))
+
+		        end;
+
+		    end
+          else
+          typeobject.Add( 'dynamic_array', true );
+
+
+		  If IsPacked then
+		    typeobject.Add( 'packed', true );
+		  If Assigned(Eltype) then
+		    typeobject.Add( 'of_type', ElType.GetDeclaration(ElType is TPasUnresolvedTypeRef) )
+		  else
+		    typeobject.Add( 'const', true );
+
+		end
+        else
+	    if AType is TpasAliasType then with TpasAliasType(AType) do begin
+
+	    	typeobject.Add( 'Alias', DestType.FullName );
+
+			// typeobject.Add( 'declaration', AType.GetDeclaration(true) );
+	        // typeobject.Add( 'SafeName', AType.SafeName );
+
+	    end
+	    else if AType is TPasRecordType  then with TPasRecordType(AType) do begin
+
+          	// todo: put it under CLASSes
+
+	        // records / structs
+	        enumarr:= TJSONArray.Create();
+
+
+	            For I:=0 to Members.Count-1 do begin
+
+                 	E:= TPasElement(Members[i]);
+
+                    if E is TPasVariable then with TPasVariable(e) do begin
+
+                        structprop:= Tjsonobject.Create();
+
+                        structprop.Add('name', E.SafeName);
+                    	structprop.Add('visibility', VisibilityNames[E.Visibility]);
+                    	structprop.Add('type', VarType.SafeName);
+
+                        enumarr.Add(structprop);
+
+                    end else if E is TPasClassOperator then with TPasClassOperator(e) do begin
+                    	// class operator on record
+					end else if E is TPasProcedure then with TPasProcedure(e) do begin
+                    	// methods in records
+					end else if E is TPasFunction then with TPasFunction(e) do begin
+                    	// methods in records
+					end else begin
+
+                        // unknown
+                        structprop:= Tjsonobject.Create();
+
+                        structprop.Add('unknown_member', E.ClassName);
+                    	structprop.Add('test declaration', E.GetDeclaration(True));
+
+                        enumarr.Add(structprop);
+
+					end;
+
+	              end;
+
+                {
+	            if Variants<>nil then
+	              begin
+	              temp:='case ';
+	              if (VariantEl is TPasVariable) then
+	                temp:=Temp+VariantEl.Name+' : '+TPasVariable(VariantEl).VarType.Name
+	              else if (VariantEl<>Nil) then
+	                temp:=temp+VariantEl.Name;
+	              S.Add(temp+' of');
+	              T.Clear;
+	              For I:=0 to Variants.Count-1 do
+	                T.Add(TPasVariant(Variants[i]).GetDeclaration(True));
+	              S.AddStrings(T);
+	              end;
+	            finally
+	              T.Free;
+	            end;
+               }
+
+            typeobject.Add( 'members', enumarr );
+
+	    	// typeobject.Add( 'TEST declaration', GetDeclaration(true) );
+
+		end
+		else if AType is TPasProcedureType then with TPasProcedureType(AType) do begin
+	      // WriteProcDecl(TpasProcedure(AElement))
+
+	        typeobject.Add( 'proceduretype', 'TPasProcedureType' );
+
+        end else if AType is TPasPointerType then with TPasPointerType(AType) do begin
+
+        	// WriteProcDecl(TpasProcedure(AElement))
+	        typeobject.Add( 'pointertype', 'TPasPointerType' );
+
+	    end else begin
+
+        	typeobject.Add( 'todo', 'todo: add implementation for ' + AType.ClassName + '.' );
+
+		end;
+
+	    typearr.Add(typeobject);
+
+	    // AType.ClassType
+    end;
+  end;
+
+
   MaybeSetLineElement(AType);
   if Full and (AType.Parent is TPasSection)  then
     PrepareDeclSection('type');
@@ -300,8 +507,8 @@ begin
     Add('NO TYPE')
   else if AType.ClassType = TPasUnresolvedTypeRef then
     Add(AType.Name)
-  else if AType.ClassType.InheritsFrom(TPasClassType) then
-    WriteClass(TPasClassType(AType))
+  else if AType.ClassType.InheritsFrom(TPasMembersType) then
+    WriteClass(TPasMembersType(AType))
   else if AType.ClassType = TPasEnumType then
     WriteEnumType(TPasEnumType(AType))
   else if AType is TPasProcedureType then
@@ -330,6 +537,8 @@ var
 	arrayobject: TJSONObject;
     Resultstr: string;
 begin
+
+	// WRITES OBJECT PROPERTY TYPE.
 
   result:= nil;
 
@@ -738,78 +947,98 @@ begin
     WriteElement(TPasElement(ASection.Declarations[i]));
 end;
 
-procedure TJsonWriter.WriteClass(AClass: TPasClassType);
+procedure TJsonWriter.WriteClass(AClass: TPasMembersType);
 
 var
   i: Integer;
-  InterfacesListPrefix: string;
+  InterfacesListPrefix, docategorize: string;
   classarr: TJSONArray;
   thisobject: TJSONObject;
   interfacers: Tjsonarray;
+  isforwarddecl: Boolean;
 
 begin
+
+  // TPasMembersType == TPasClassType or TPasRecordType
+{
   PrepareDeclSection('type');
   Addln;
   MaybeSetLineElement(AClass);
+}
+  docategorize:= 'class';
 
+  isforwarddecl:= ( (AClass is TPasClassType) and TPasClassType(AClass).IsForward = true);
 
-  if (fjson.Find('class', classarr) = false) then begin
+  if AClass is TPasRecordType then begin
+	docategorize:= 'record';
+    isforwarddecl:= false;
+  end;
+
+  if (fjson.Find(docategorize, classarr) = false) then begin
 
 	  classarr:= TJSONArray.Create();
-	  fjson.Add('class', classarr);
+	  fjson.Add(docategorize, classarr);
 
   end;
 
-  // AClass.SafeName
-
-  if AClass.IsForward = false then begin
+  if isforwarddecl = false then begin
 
 	  thisobject:= TJSONObject.create();
 
 	  thisobject.add('name', AClass.SafeName);
 	  thisobject.add('packed', AClass.IsPacked);
-	  thisobject.add('kind', ObjKindNames[ AClass.ObjKind ] );
 
-	  if (AClass.ObjKind = okTypeHelper) then
-	    if HasOption(woAlwaysRecordHelper) then
+      if (AClass is TPasClassType) then begin
+	  	thisobject.add('kind', ObjKindNames[ TPasClassType(AClass).ObjKind ] );
+
+	  	if ((AClass is TPasClassType) and (TPasClassType(AClass).ObjKind = okTypeHelper)) then
+
+          if HasOption(woAlwaysRecordHelper) then
 	  		thisobject.add('helper', 'record' )
 	  	else
 		  	thisobject.add('helper', 'type' );
 
-	  if (AClass.ObjKind in [okTypeHelper,okRecordHelper,okClassHelper]) then
-	    begin
-	    if not Assigned(AClass.HelperForType) then
-	      thisobject.add('helpertype', 'unknowntype' )
-	    else
-	      thisobject.add('helpertype', AClass.HelperForType.SafeName );
-      end;
+		  if (TPasClassType(AClass).ObjKind in [okTypeHelper,okRecordHelper,okClassHelper]) then
+		    begin
+		    if not Assigned(TPasClassType(AClass).HelperForType) then
+		      thisobject.add('helpertype', 'unknowntype' )
+		    else
+		      thisobject.add('helpertype', TPasClassType(AClass).HelperForType.SafeName );
+	      end;
+
+          with TPasClassType(AClass) do begin
+
+          	if (ObjKind=okClass) and (ExternalName<>'') and NotOption(woNoExternalClass) then thisobject.add('ExternalName', ExternalName );
+			  if Assigned(AncestorType) then thisobject.add('ancestor', AncestorType.SafeName );
+
+        	  if Interfaces.Count > 0 then
+        	  begin
+
+                  // if Assigned(AncestorType) then
+
+                interfacers:= TJSONArray.Create();
+
+                interfacers.Add(HelperForType.SafeName);
+              	thisobject.add('interfaces', interfacers );
+
+                // Add(InterfacesListPrefix + TPasType(Interfaces[0]).SafeName);
+
+        	    for i := 1 to Interfaces.Count - 1 do
+                	interfacers.Add(TPasType(Interfaces[i]).SafeName);
+
+        	  end;
+
+        	  if ObjKind = okInterface then
+        	    if Assigned(GUIDExpr) then
+        	      thisobject.add('guid', '['+InterfaceGUID+']' );
+
+
+		  end;
 
 
 
-	  if (AClass.ObjKind=okClass) and (ACLass.ExternalName<>'') and NotOption(woNoExternalClass) then thisobject.add('ExternalName', AClass.ExternalName );
-	  if Assigned(AClass.AncestorType) then thisobject.add('ancestor', AClass.AncestorType.SafeName );
-
-	  if AClass.Interfaces.Count > 0 then
-	  begin
-
-          // if Assigned(AClass.AncestorType) then
-
-        interfacers:= TJSONArray.Create();
-
-        interfacers.Add(AClass.HelperForType.SafeName);
-      	thisobject.add('interfaces', interfacers );
-
-        // Add(InterfacesListPrefix + TPasType(AClass.Interfaces[0]).SafeName);
-
-	    for i := 1 to AClass.Interfaces.Count - 1 do
-        	interfacers.Add(TPasType(AClass.Interfaces[i]).SafeName);
-
-	  end;
-
-	  if AClass.ObjKind = okInterface then
-	    if Assigned(AClass.GUIDExpr) then
-	      thisobject.add('guid', '['+AClass.InterfaceGUID+']' );
-
+      end else
+      	thisobject.add('kind', 'record' );
 
       WriteMembersjson(AClass.Members, thisobject); // TJSONObject
 
@@ -826,60 +1055,61 @@ begin
 
 
 
+  if (AClass is TPasClassType) then with TPasClassType(AClass) do begin
 
 
+	  if AClass.IsPacked then
+	     Add('packed ');                      // 12/04/04 - Dave - Added
+	  case ObjKind of
+	    okObject: Add('object');
+	    okClass: Add('class');
+	    okInterface: Add('interface');
+	    okTypeHelper :
+	      if HasOption(woAlwaysRecordHelper) then
+	        Add('record helper')
+	      else
+	        Add('type helper');
+	    okRecordHelper: Add('record helper');
+	    okClassHelper: Add('class helper');
+	  end;
+	  if (ObjKind in [okTypeHelper,okRecordHelper,okClassHelper]) then
+	    begin
+	    if not Assigned(HelperForType) then
+	      Add(' for unknowntype')
+	    else
+	      Add(' for '+HelperForType.SafeName)
+	    end;
 
-  if AClass.IsPacked then
-     Add('packed ');                      // 12/04/04 - Dave - Added
-  case AClass.ObjKind of
-    okObject: Add('object');
-    okClass: Add('class');
-    okInterface: Add('interface');
-    okTypeHelper :
-      if HasOption(woAlwaysRecordHelper) then
-        Add('record helper')
-      else
-        Add('type helper');
-    okRecordHelper: Add('record helper');
-    okClassHelper: Add('class helper');
+	  if IsForward then
+	    exit;
+	  if (ObjKind=okClass) and (ExternalName<>'') and NotOption(woNoExternalClass) then
+	    Add(' external name ''%s'' ',[ExternalName]);
+	  if Assigned(AncestorType) then
+	    Add('(' + AncestorType.SafeName);
+	  if Interfaces.Count > 0 then
+	  begin
+	    if Assigned(AncestorType) then
+	      InterfacesListPrefix:=', '
+	    else
+	      InterfacesListPrefix:='(';
+	    Add(InterfacesListPrefix + TPasType(Interfaces[0]).SafeName);
+	    for i := 1 to Interfaces.Count - 1 do
+	      Add(', ' + TPasType(Interfaces[i]).SafeName);
+	  end;
+	  if Assigned(AncestorType) or (Interfaces.Count > 0) then
+	    AddLn(')')
+	  else
+	    AddLn;
+	  if ObjKind = okInterface then
+	    if Assigned(GUIDExpr) then
+	      AddLn('['+InterfaceGUID+']');
+	  IncIndent;
+	  IncDeclSectionLevel;
+	  WriteMembers(Members);
+	  DecDeclSectionLevel;
+	  DecIndent;
+	  Add('end');
   end;
-  if (AClass.ObjKind in [okTypeHelper,okRecordHelper,okClassHelper]) then
-    begin
-    if not Assigned(AClass.HelperForType) then
-      Add(' for unknowntype')
-    else
-      Add(' for '+AClass.HelperForType.SafeName)
-    end;
-
-  if AClass.IsForward then
-    exit;
-  if (AClass.ObjKind=okClass) and (ACLass.ExternalName<>'') and NotOption(woNoExternalClass) then
-    Add(' external name ''%s'' ',[AClass.ExternalName]);
-  if Assigned(AClass.AncestorType) then
-    Add('(' + AClass.AncestorType.SafeName);
-  if AClass.Interfaces.Count > 0 then
-  begin
-    if Assigned(AClass.AncestorType) then
-      InterfacesListPrefix:=', '
-    else
-      InterfacesListPrefix:='(';
-    Add(InterfacesListPrefix + TPasType(AClass.Interfaces[0]).SafeName);
-    for i := 1 to AClass.Interfaces.Count - 1 do
-      Add(', ' + TPasType(AClass.Interfaces[i]).SafeName);
-  end;
-  if Assigned(AClass.AncestorType) or (AClass.Interfaces.Count > 0) then
-    AddLn(')')
-  else
-    AddLn;
-  if AClass.ObjKind = okInterface then
-    if Assigned(AClass.GUIDExpr) then
-      AddLn('['+AClass.InterfaceGUID+']');
-  IncIndent;
-  IncDeclSectionLevel;
-  WriteMembers(AClass.Members);
-  DecDeclSectionLevel;
-  DecIndent;
-  Add('end');
 
   classarr.Add(thisobject);
 
@@ -995,9 +1225,9 @@ begin
 
     // todo: static variables.
 
-    currentmethod.Add('Member.ClassName', Member.ClassName);
+    // currentmethod.Add('Member.ClassName', Member.ClassName);
 
-    // currentmethod.Add('test_decl', Member.GetDeclaration(true));
+    // currentmethod.Add('SHIT', Member.GetDeclaration(true));
 
 
     // if (TPasProcedureImpl(aMembers[i]).IsClassMethod) then currentmethod.Add('IsClass', true);
