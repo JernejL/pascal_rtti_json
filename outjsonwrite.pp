@@ -104,7 +104,7 @@ type
     procedure AddForwardClasses(aSection: TPasSection); virtual;
     procedure WriteResourceString(aStr: TPasResString); virtual;
     procedure WriteEnumType(AType: TPasEnumType); virtual;
-    procedure WriteElement(AElement: TPasElement; SkipSection : Boolean = False);virtual;
+    procedure WriteElement(AElement: TPasElement; SkipSection : Boolean = False); virtual;
     procedure WriteType(AType: TPasType; Full : Boolean = True);virtual;
     function WriteTypeJson(AType: TPasType; Full: Boolean; stortomember: Tjsonobject): Tjsonstring; virtual;
 
@@ -247,8 +247,7 @@ begin
     FLineElement:=AElement;
 end;
 
-procedure TJsonWriter.WriteElement(AElement: TPasElement;
-	SkipSection: Boolean);
+procedure TJsonWriter.WriteElement(AElement: TPasElement; SkipSection: Boolean);
 
 begin
   if not SkipSection then
@@ -598,10 +597,13 @@ begin
 		end;
 	end;
 
-  	exit( Tjsonstring.Create( 'ARRIBARAJ ' + TPasArrayType(AType).GetDeclaration(Full) ) )
+  	exit( Tjsonstring.Create( 'error converting unsupported array type: ' + TPasArrayType(AType).GetDeclaration(Full) ) )
+
+  end else if AType is TPasRangeType then with TPasRangeType(AType) do begin // time: -1..1099511627774;
+
+ 	  exit( Tjsonstring.Create( format('%s .. %s', [ RangeStart, RangeEnd ] ) )); // bit range.
 
   end
-
 
   (*
   else if AType.ClassType.InheritsFrom(TPasClassType) then
@@ -620,7 +622,9 @@ begin
     Add(AType.GetDeclaration(true))
   *)
   else
-    raise EPasWriter.CreateFmt('WriteTypeJson Writing not implemented for %s type nodes',[aType.ElementTypeName]);
+  	exit( Tjsonstring.Create( format('WriteTypeJson Writing not implemented for %s type nodes', [aType.ElementTypeName] ) ));
+
+    // raise EPasWriter.CreateFmt('WriteTypeJson Writing not implemented for %s type nodes',[aType.ElementTypeName]);
 
 end;
 
@@ -893,14 +897,27 @@ Var
   end;
 
   Procedure AddUnit(Const aName : String; AUnitFile : TPasExpr);
+  var
+	  typearr: TJSONArray;
+      declaration: TJSONObject;
   begin
-    if c > 0 then
-      Add(', ')
-    else
-      Add('uses ');
-    Add(CheckUnitAlias(AName));
+
+      if (fjson.Find('uses', typearr) = false) then begin
+
+    	  typearr:= TJSONArray.Create();
+    	  fjson.Add('uses', typearr);
+
+      end;
+
+	declaration:= TJSONObject.Create();
+
+    declaration.Add('name', CheckUnitAlias(AName));
+
     if (AUnitFile<>Nil) then
-      Add(' in '+GetExpr(AUnitFile));
+      declaration.Add('file', GetExpr(AUnitFile));
+
+    typearr.Add(declaration);
+
     Inc(c);
   end;
 
@@ -917,13 +934,13 @@ begin
         begin
         u:=Trim(ExtractWord(1,ExtraUnits,UnitSeps));
         if (U<>'') then
-          AddUnit(U,Nil);
+          AddUnit(U,Nil );
         end;
     if length(ASection.UsesClause)=ASection.UsesList.Count then
       begin
       for i := 0 to length(ASection.UsesClause)-1 do
         if AllowUnit(ASection.UsesClause[i].Name) then
-          AddUnit(ASection.UsesClause[i].Name,ASection.UsesClause[i].InFilename);
+          AddUnit(ASection.UsesClause[i].Name,ASection.UsesClause[i].InFilename );
       end
     else
       for i := 0 to ASection.UsesList.Count - 1 do
@@ -943,7 +960,8 @@ var
   i: Integer;
 
 begin
-  // WriteUsesList(aSection);
+
+  WriteUsesList(aSection);
 
   CurDeclSection := '';
   if HasOption(woForwardClasses) then
@@ -951,8 +969,10 @@ begin
     AddForwardClasses(ASection);
     AddLn;
     end;
+
   for i := 0 to ASection.Declarations.Count - 1 do
     WriteElement(TPasElement(ASection.Declarations[i]));
+
 end;
 
 procedure TJsonWriter.WriteClass(AClass: TPasMembersType);

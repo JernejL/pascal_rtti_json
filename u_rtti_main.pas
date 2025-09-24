@@ -154,6 +154,8 @@ begin
       Scanner.AddDefine('FPK');
       Scanner.AddDefine('FPC');
 
+      Scanner.AddDefine('RTTI_WORKER');
+
       For S in FDefines do
         Scanner.AddDefine(S);
 
